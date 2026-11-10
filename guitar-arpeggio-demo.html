@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#131918">
+<title>Guitar Arpeggio JS · Fretboard Explorer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page:#131918; --panel:#1b2422; --well:#141d1b; --line:#354540;
+    --text:#eef2e9; --sub:#afc1b7; --mint:#b8dfc6; --orange:#ffb77a;
+    --gaj-wood:#293a35; --gaj-fret:#70867b; --gaj-string:#9db2a4;
+    --gaj-inlay:#5a7569; --gaj-ink:#c4d3c9; --gaj-root:var(--orange);
+    --gaj-tone:var(--mint); --gaj-route:#dda5f4;
+  }
+  * {box-sizing:border-box}
+  body {margin:0;background:radial-gradient(ellipse at 78% 0,#243630 0,transparent 36rem),var(--page);color:var(--text);font:16px/1.5 system-ui,sans-serif}
+  main, .top-inner {width:min(1140px,calc(100% - 40px));margin-inline:auto}
+  header {border-bottom:1px solid #34433e}
+  .top-inner {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 0}
+  .brand {font-weight:720;font-size:.92rem;display:flex;align-items:center;gap:9px}
+  .brand svg {color:var(--orange)}
+  .tag {color:var(--sub);font:600 .7rem ui-monospace,monospace;letter-spacing:.07em;text-transform:uppercase}
+  .intro {padding:34px 0 26px}
+  .kicker {color:var(--orange);font:700 .72rem ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;margin:0 0 10px}
+  h1,h2,p {margin:0}
+  h1 {font-size:clamp(2.15rem,5vw,3.45rem);line-height:1.05;letter-spacing:-.055em}
+  .intro > p:last-child {margin-top:12px;color:var(--sub);max-width:53ch}
+  .controls,.panel {background:var(--panel);border:1px solid var(--line);border-radius:14px}
+  .controls {padding:16px;display:grid;grid-template-columns:.72fr 1.08fr 1.06fr 1.04fr 1.03fr 1.42fr;gap:14px}
+  label,.field-label {display:block;font-size:.76rem;font-weight:670;color:var(--sub);margin-bottom:5px}
+  button,select {font:inherit;color:var(--text);border:1px solid #495e54;background:var(--well);border-radius:8px;min-height:39px}
+  select {width:100%;padding:6px 8px;font-size:.9rem}
+  button {padding:6px 12px;cursor:pointer;font-size:.87rem;white-space:nowrap}
+  button:hover:not(:disabled) {border-color:var(--mint)}
+  button:disabled {opacity:.47;cursor:default}
+  button:focus-visible,select:focus-visible,input:focus-visible,.board-scroll:focus-visible,.gaj-note:focus-visible {outline:2px solid var(--orange);outline-offset:3px}
+  .panel {margin-top:14px;overflow:hidden}
+  .panel-head,.panel-foot,.practice-head {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 17px;flex-wrap:wrap}
+  .panel-head {border-bottom:1px solid var(--line)}
+  .panel-foot {border-top:1px solid var(--line);font-size:.81rem;color:var(--sub)}
+  h2 {font-size:1.16rem;letter-spacing:-.025em}
+  .tones {display:flex;gap:6px;flex-wrap:wrap}
+  .tone {border:1px solid #45584e;border-radius:6px;padding:2px 7px;font-size:.76rem;color:var(--sub)}
+  .tone strong {margin-right:5px;color:var(--text)}
+  .tone:first-child strong {color:var(--orange)}
+  .board-scroll {overflow-x:auto;padding:10px 14px 0;background:var(--well);scrollbar-color:#526b60 var(--well)}
+  .gaj-note:hover circle,.gaj-note:focus-visible circle,.gaj-note.playing circle {stroke:#fff;stroke-width:3.5}
+  .gaj-note.playing circle {fill:#fff0ab}
+  .marker-key {display:flex;gap:14px;flex-wrap:wrap}
+  .marker-key span {display:flex;align-items:center;gap:6px}
+  .dot {display:inline-block;width:9px;height:9px;border-radius:100%;background:var(--mint)}
+  .dot.root {background:var(--orange)}
+  .route {display:inline-block;width:13px;height:2px;background:var(--gaj-route)}
+  .mirror {display:flex;align-items:center;gap:6px;margin:0}
+  input {accent-color:var(--mint)}
+  .practice-head {border-bottom:1px solid var(--line)}
+  .transport {display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .transport label {margin:0}
+  .transport select {width:auto}
+  .primary {background:var(--mint);border-color:var(--mint);color:#17291e;font-weight:750}
+  .primary:hover:not(:disabled) {background:#d6f3df}
+  .tab-wrap {padding:12px 17px 14px;overflow-x:auto}
+  pre {margin:0;font:0.83rem/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--mint);width:max-content}
+  .hint,.status {color:var(--sub);font-size:.8rem}
+  .status {margin:5px 0 0}
+  .status:empty {margin:0}
+  footer {color:var(--sub);font-size:.8rem;padding:14px 0 23px}
+  [hidden] {display:none!important}
+  @media (max-width:780px) {.controls {grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media (max-width:470px) {
+    main,.top-inner {width:calc(100% - 24px)}
+    .controls {grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px}
+    #variation-field {grid-column:span 2}
+    .intro {padding-top:24px}
+    .panel-head,.panel-foot,.practice-head {padding-inline:12px}
+  }
+</style>
+</head>
+<body>
+<header><div class="top-inner">
+  <div class="brand"><svg aria-hidden="true" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 18h4l4-6h4l4-6"/><circle cx="4" cy="18" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="20" cy="6" r="2"/></svg>Guitar Arpeggio JS</div>
+  <div class="tag">Standard tuning · EADGBE</div>
+</div></header>
+<main>
+  <section class="intro">
+    <p class="kicker">Guitar practice tool</p>
+    <h1>Arpeggio Fretboard</h1>
+    <p>Explore chord tones across the neck, then follow a sweep shape and hear how the notes connect.</p>
+  </section>
+  <section class="controls" aria-label="Arpeggio controls">
+    <div><label for="root">Root</label><select id="root"></select></div>
+    <div><label for="type">Chord type</label><select id="type"></select></div>
+    <div><label for="mode">View</label><select id="mode">
+      <option value="sweep">Sweep patterns</option><option value="position">Fret position</option><option value="full">Full neck</option>
+    </select></div>
+    <div id="strings-field"><label for="strings">Sweep strings</label><select id="strings">
+      <option value="6">6 strings · E–e</option><option value="5">5 strings · A–e</option><option value="3">3 strings · G–e</option>
+    </select></div>
+    <div id="position-field" hidden><label for="position">Starting fret</label><select id="position"></select></div>
+    <div><label for="label">Note labels</label><select id="label">
+      <option value="degrees">Chord degrees</option><option value="notes">Note names</option><option value="order">Play order</option>
+    </select></div>
+    <div id="variation-field"><label for="variation">Sweep shape</label><select id="variation"></select></div>
+  </section>
+  <section class="panel" aria-labelledby="chord-title">
+    <div class="panel-head">
+      <div><h2 id="chord-title"></h2><p class="hint" id="board-info"></p></div>
+      <div class="tones" id="tones" aria-label="Chord tones"></div>
+    </div>
+    <div class="board-scroll" id="board-scroll" tabindex="0" role="region" aria-label="Scrollable fretboard"><div id="board"></div></div>
+    <div class="panel-foot">
+      <div class="marker-key"><span><i class="dot root"></i>Root</span><span><i class="dot"></i>Chord tone</span><span id="route-key"><i class="route"></i>Sweep path</span></div>
+      <label class="mirror"><input type="checkbox" id="left"> Mirror for left-handed view</label>
+    </div>
+  </section>
+  <section class="panel" id="practice" aria-labelledby="practice-title">
+    <div class="practice-head">
+      <div><h2 id="practice-title">Sweep tab</h2><p class="hint" id="practice-info"></p></div>
+      <div class="transport">
+        <label for="direction">Direction</label><select id="direction">
+          <option value="up">Ascending</option><option value="down">Descending</option><option value="both">Up and down</option>
+        </select>
+        <label for="tempo">Tempo</label><select id="tempo">
+          <option value="45">45 BPM</option><option value="60" selected>60 BPM</option><option value="80">80 BPM</option><option value="100">100 BPM</option><option value="120">120 BPM</option>
+        </select>
+        <button id="play" class="primary" type="button">Play shape</button>
+      </div>
+    </div>
+    <div class="tab-wrap"><pre id="tab" aria-label="Guitar tablature"></pre></div>
+  </section>
+  <p class="status" id="status" aria-live="polite"></p>
+  <footer>Tap any note to hear it. Use the play-order labels to see which note comes next.</footer>
+</main>
+<script>
+/*! Guitar Arpeggio JS */
+(function (factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else globalThis.GuitarArpeggio = factory();
+})(function () {
+  'use strict';
+
+  const STANDARD_TUNING = Object.freeze([40, 45, 50, 55, 59, 64]);
+  const STRINGS = ['E', 'A', 'D', 'G', 'B', 'e'];
+  const ROOTS = Object.freeze(['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']);
+  const NATURAL = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const LETTERS = Object.keys(NATURAL);
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  const CHORDS = Object.freeze(Object.fromEntries([
+    ['major', 'Major', '', [0, 4, 7], ['1', '3', '5']],
+    ['minor', 'Minor', 'm', [0, 3, 7], ['1', '♭3', '5']],
+    ['diminished', 'Diminished', 'dim', [0, 3, 6], ['1', '♭3', '♭5']],
+    ['augmented', 'Augmented', 'aug', [0, 4, 8], ['1', '3', '♯5']],
+    ['sus2', 'Suspended 2', 'sus2', [0, 2, 7], ['1', '2', '5']],
+    ['sus4', 'Suspended 4', 'sus4', [0, 5, 7], ['1', '4', '5']],
+    ['6', 'Major 6', '6', [0, 4, 7, 9], ['1', '3', '5', '6']],
+    ['m6', 'Minor 6', 'm6', [0, 3, 7, 9], ['1', '♭3', '5', '6']],
+    ['maj7', 'Major 7', 'maj7', [0, 4, 7, 11], ['1', '3', '5', '7']],
+    ['7', 'Dominant 7', '7', [0, 4, 7, 10], ['1', '3', '5', '♭7']],
+    ['m7', 'Minor 7', 'm7', [0, 3, 7, 10], ['1', '♭3', '5', '♭7']],
+    ['mMaj7', 'Minor major 7', 'm(maj7)', [0, 3, 7, 11], ['1', '♭3', '5', '7']],
+    ['m7b5', 'Half diminished', 'm7♭5', [0, 3, 6, 10], ['1', '♭3', '♭5', '♭7']],
+    ['dim7', 'Diminished 7', 'dim7', [0, 3, 6, 9], ['1', '♭3', '♭5', '𝄫7']],
+    ['add9', 'Major add9', 'add9', [0, 2, 4, 7], ['1', '9', '3', '5']],
+    ['9', 'Dominant 9', '9', [0, 2, 4, 7, 10], ['1', '9', '3', '5', '♭7']],
+  ].map(([id, name, suffix, intervals, degrees]) => [id, Object.freeze({
+    name, suffix, intervals: Object.freeze(intervals), degrees: Object.freeze(degrees),
+  })])));
+
+  const mod = (n, divisor = 12) => ((n % divisor) + divisor) % divisor;
+  const pretty = (s) => s.replaceAll('#', '♯').replaceAll('b', '♭');
+
+  function getChord(root = 'A', type = 'minor') {
+    const match = /^([A-G])([#b]?)$/i.exec(String(root).trim().replaceAll('♯', '#').replaceAll('♭', 'b'));
+    if (!match) throw new RangeError('Choose a root from A to G with an optional sharp or flat.');
+    if (!Object.hasOwn(CHORDS, type)) throw new RangeError('Unknown chord type.');
+    const letter = match[1].toUpperCase();
+    const accidental = match[2].toLowerCase();
+    const pitch = mod(NATURAL[letter] + (accidental === '#' ? 1 : accidental === 'b' ? -1 : 0));
+    const definition = CHORDS[type];
+    const tones = definition.intervals.map((interval, index) => {
+      const degree = definition.degrees[index];
+      const toneLetter = LETTERS[mod(LETTERS.indexOf(letter) + Number(degree.match(/\d+/)[0]) - 1, 7)];
+      const tonePitch = mod(pitch + interval);
+      const alteration = mod(tonePitch - NATURAL[toneLetter] + 6) - 6;
+      const sign = alteration < 0 ? '♭' : '♯';
+      const spelling = { '-2': '𝄫', 2: '𝄪' }[alteration] ?? sign.repeat(Math.abs(alteration));
+      const name = toneLetter + spelling;
+      return { interval, degree, name, pitch: tonePitch, index };
+    });
+    const name = pretty(letter + accidental);
+    return { root: name, symbol: name + definition.suffix, type, tones };
+  }
+
+  function fretNumber(value) {
+    if (!Number.isInteger(value) || value < 0 || value > 24) {
+      throw new RangeError('Frets must be integers from 0 through 24.');
+    }
+    return value;
+  }
+
+  function boardNotes(chord, startFret, endFret) {
+    fretNumber(startFret);
+    fretNumber(endFret);
+    if (startFret > endFret) throw new RangeError('The start fret must precede the end fret.');
+    const tones = new Map(chord.tones.map((tone) => [tone.pitch, tone]));
+    return STANDARD_TUNING.flatMap((openMidi, stringIndex) => {
+      const notes = [];
+      for (let fret = startFret; fret <= endFret; fret++) {
+        const midi = openMidi + fret;
+        const tone = tones.get(mod(midi));
+        if (tone) notes.push({ ...tone, string: 6 - stringIndex, fret, midi });
+      }
+      return notes;
+    });
+  }
+
+  function getPosition({ root, type, startFret = 0, endFret = 24 } = {}) {
+    const chord = getChord(root, type);
+    return { chord, startFret, endFret, notes: boardNotes(chord, startFret, endFret) };
+  }
+
+  function getSweepPatterns({ root, type, strings = 6, startFret = 0, endFret = 24, maxSpan = 5 } = {}) {
+    if (![3, 5, 6].includes(strings)) throw new RangeError('Choose 3, 5 or 6 sweep strings.');
+    if (!Number.isInteger(maxSpan) || maxSpan < 2 || maxSpan > 6) {
+      throw new RangeError('The sweep span must be between 2 and 6 frets.');
+    }
+    const chord = getChord(root, type);
+    const tones = chord.tones.length;
+    const notes = boardNotes(chord, startFret, endFret);
+    const groups = Array.from({ length: strings }, (_, index) => notes.filter((note) => note.string === strings - index));
+    const choices = groups.map((group, index) => group.flatMap((note, noteIndex) => {
+      const next = group[noteIndex + 1];
+      return (index === 0 || index === groups.length - 1) && next ? [[note], [note, next]] : [[note]];
+    }));
+    const bestAtFret = new Map();
+
+    function visit(path, index, low, high, mask, score) {
+      if (index === strings) {
+        if (mask !== (1 << tones) - 1) return;
+        // Compare shapes with the same bass-string starting fret.
+        const rank = score * 10 + (high - low) * 2 + (path[0].degree === '1' ? 0 : 4) - path.length;
+        const key = path[0].fret;
+        if (!bestAtFret.has(key) || rank < bestAtFret.get(key).rank) {
+          bestAtFret.set(key, { notes: path, startFret: low, endFret: high, rank });
+        }
+        return;
+      }
+      const previous = path.at(-1);
+      for (const choice of choices[index]) {
+        const first = choice[0];
+        const last = choice.at(-1);
+        if (previous && first.midi <= previous.midi) continue;
+        const nextLow = Math.min(low, first.fret);
+        const nextHigh = Math.max(high, last.fret);
+        if (nextHigh - nextLow + 1 > maxSpan) continue;
+        const nextMask = choice.reduce((used, note) => used | (1 << note.index), mask);
+        // Prefer nearby chord tones, including across the octave boundary.
+        const jump = previous ? mod(first.index - previous.index - 1, tones) : 0;
+        const shift = previous ? Math.abs(first.fret - previous.fret) : 0;
+        visit([...path, ...choice], index + 1, nextLow, nextHigh, nextMask, score + jump * 3 + shift);
+      }
+    }
+
+    visit([], 0, Infinity, -Infinity, 0, 0);
+    return [...bestAtFret.values()]
+      .sort((a, b) => a.startFret - b.startFret || a.rank - b.rank)
+      .map(({ rank, ...shape }) => shape);
+  }
+
+  function draw(container, { notes, startFret, endFret, chord, label = 'degrees', route = [], leftHanded = false, onNote } = {}) {
+    if (!container || typeof container.replaceChildren !== 'function') throw new TypeError('Provide a DOM container.');
+    fretNumber(startFret);
+    fretNumber(endFret);
+    if (endFret < startFret) throw new RangeError('The start fret must precede the end fret.');
+    const doc = container.ownerDocument;
+    const fretCount = endFret - startFret + 1;
+    const spacing = Math.round(Math.max(53, Math.min(130, (container.clientWidth - 84) / fretCount)));
+    const width = 84 + fretCount * spacing;
+    const height = 252;
+    const offset = 43;
+    const firstY = 57;
+    const rowGap = 31;
+    const flip = (x) => leftHanded ? width - x : x;
+    const fretX = (fret) => flip(offset + (fret - startFret + 0.5) * spacing);
+    const stringY = (string) => firstY + (string - 1) * rowGap;
+
+    function add(parent, tag, attrs, content) {
+      const element = doc.createElementNS(SVG, tag);
+      for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, value);
+      if (content != null) element.textContent = content;
+      parent.appendChild(element);
+      return element;
+    }
+
+    const svg = doc.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('class', 'gaj-board');
+    svg.setAttribute('role', onNote ? 'group' : 'img');
+    svg.setAttribute('aria-label', `${chord?.symbol ?? 'Arpeggio'} guitar fretboard, frets ${startFret} through ${endFret}`);
+    svg.style.cssText = `display:block;width:100%;min-width:${84 + fretCount * 47}px;max-width:${width}px;height:auto;margin-inline:auto;font-family:system-ui,sans-serif;`;
+
+    const boardStart = offset + (startFret === 0 ? spacing : 0);
+    const boardEnd = width - offset + 2;
+    const boardWidth = Math.max(0, boardEnd - boardStart);
+    add(svg, 'rect', {
+      x: leftHanded ? flip(boardEnd) : boardStart, y: 40, width: boardWidth, height: 190, rx: 7,
+      fill: 'var(--gaj-wood, #2c3636)',
+    });
+
+    for (let fret = startFret; fret <= endFret; fret++) {
+      const x = fretX(fret);
+      add(svg, 'text', { x, y: 23, fill: 'var(--gaj-ink, #e4e9e6)', 'font-size': 12, 'text-anchor': 'middle' }, fret);
+      if (fret % 12 === 0 && fret !== 0) {
+        for (const y of [104, 166]) add(svg, 'circle', { cx: x, cy: y, r: 4, fill: 'var(--gaj-inlay, #8a9995)' });
+      } else if ([3, 5, 7, 9].includes(fret % 12)) {
+        add(svg, 'circle', { cx: x, cy: 135, r: 4, fill: 'var(--gaj-inlay, #8a9995)' });
+      }
+      const lineX = flip(offset + (fret - startFret + 1) * spacing);
+      add(svg, 'line', { x1: lineX, x2: lineX, y1: 41, y2: 229, stroke: 'var(--gaj-fret, #808d88)', 'stroke-width': fret === 0 ? 4 : 1 });
+    }
+
+    for (let string = 1; string <= 6; string++) {
+      const y = stringY(string);
+      add(svg, 'line', { x1: flip(offset), x2: flip(boardEnd), y1: y, y2: y, stroke: 'var(--gaj-string, #b0bcb6)', 'stroke-width': 0.75 + string * 0.23 });
+      add(svg, 'text', {
+        x: flip(21), y, fill: 'var(--gaj-ink, #e4e9e6)', 'font-size': 13,
+        'text-anchor': 'middle', 'dominant-baseline': 'central',
+      }, STRINGS[6 - string]);
+    }
+
+    const ordered = new Map(route.map((note, index) => [`${note.string}:${note.fret}`, index + 1]));
+    if (route.length > 1) {
+      add(svg, 'polyline', {
+        points: route.map((note) => `${fretX(note.fret)},${stringY(note.string)}`).join(' '),
+        fill: 'none', stroke: 'var(--gaj-route, #d7a8fa)', 'stroke-width': 2.2, 'stroke-linejoin': 'round',
+      });
+    }
+
+    for (const note of notes) {
+      const { fret, string, degree, name } = note;
+      if (fret < startFret || fret > endFret) continue;
+      const x = fretX(fret);
+      const y = stringY(string);
+      const step = ordered.get(`${string}:${fret}`);
+      const description = `${name}, degree ${degree}, string ${string}, fret ${fret}${step ? `, step ${step}` : ''}`;
+      const attrs = { class: 'gaj-note', 'data-string': string, 'data-fret': fret, 'data-midi': note.midi };
+      if (onNote) Object.assign(attrs, { role: 'button', tabindex: 0, 'aria-label': description, style: 'cursor:pointer' });
+      const marker = add(svg, 'g', attrs);
+      add(marker, 'title', {}, description);
+      const isRoot = degree === '1';
+      add(marker, 'circle', {
+        cx: x, cy: y, r: 13, fill: isRoot ? 'var(--gaj-root, #ebae71)' : 'var(--gaj-tone, #a9dac7)',
+        stroke: 'var(--gaj-outline, #192423)', 'stroke-width': isRoot ? 2 : 1,
+      });
+      add(marker, 'text', {
+        x, y, 'dominant-baseline': 'central', 'text-anchor': 'middle',
+        'font-size': 10, 'font-weight': 750, fill: 'var(--gaj-label, #142321)', 'pointer-events': 'none',
+      }, label === 'notes' ? name : label === 'order' && step ? step : degree);
+      if (onNote) {
+        marker.addEventListener('click', () => onNote(note));
+        marker.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onNote(note);
+          }
+        });
+      }
+    }
+    container.replaceChildren(svg);
+    return svg;
+  }
+
+  return Object.freeze({ ROOTS, CHORDS, STANDARD_TUNING, getChord, getPosition, getSweepPatterns, draw });
+});
+
+</script>
+<script>
+'use strict';
+const G = GuitarArpeggio;
+const $ = (id) => document.getElementById(id);
+const root = $('root'), type = $('type'), mode = $('mode'), strings = $('strings');
+const position = $('position'), labels = $('label'), variation = $('variation');
+const board = $('board'), play = $('play'), direction = $('direction'), tempo = $('tempo');
+let shape;
+let patterns = [];
+let audio;
+let playback;
+let previousShapeFret = 5;
+
+function addOptions(select, options) {
+  select.replaceChildren(...options.map(([value, text]) => new Option(text, value)));
+}
+addOptions(root, G.ROOTS.map((name) => [name, name.replace('#', '♯').replace('b', '♭')]));
+root.value = 'A';
+addOptions(type, ['major', 'minor', 'diminished', 'augmented', 'sus2', 'sus4', '6', 'm6', 'maj7', '7', 'm7', 'mMaj7', 'm7b5', 'dim7', 'add9', '9']
+  .map((key) => [key, G.CHORDS[key].name]));
+type.value = 'minor';
+addOptions(position, Array.from({length:21}, (_, fret) => [fret, fret === 0 ? '0 · Open' : String(fret)]));
+position.value = '5';
+
+function choosePatterns() {
+  patterns = G.getSweepPatterns({root:root.value, type:type.value, strings:Number(strings.value)});
+  addOptions(variation, patterns.map((pattern, index) => {
+    const bass = pattern.notes[0];
+    return [index, `${bass.name} bass · frets ${pattern.startFret}–${pattern.endFret}`];
+  }));
+  let bestIndex = 0;
+  let bestScore = Infinity;
+  patterns.forEach((pattern, index) => {
+    const bass = pattern.notes[0];
+    const score = Math.abs(bass.fret - previousShapeFret) + (bass.degree === '1' ? 0 : 0.5);
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+  if (patterns.length) variation.value = String(bestIndex);
+}
+
+function sequence() {
+  const route = shape.notes;
+  if (direction.value === 'down') return [...route].reverse();
+  if (direction.value === 'both') return [...route, ...route.slice(0, -1).reverse()];
+  return route;
+}
+
+function renderTab() {
+  const notes = sequence();
+  $('tab').textContent = ['e','B','G','D','A','E'].map((string, index) => {
+    const columns = notes.map((note) => note.string === index + 1 ? String(note.fret).padEnd(3, '-') : '---');
+    return `${string}|-${columns.join('')}|`;
+  }).join('\n');
+  $('practice-info').textContent = `${notes.length} notes · eighth-note playback`;
+}
+
+function render() {
+  stop();
+  const isSweep = mode.value === 'sweep';
+  const isPosition = mode.value === 'position';
+  shape = isSweep ? patterns[Number(variation.value)] : undefined;
+  $('strings-field').hidden = !isSweep;
+  $('position-field').hidden = !isPosition;
+  $('variation-field').hidden = !isSweep;
+  $('route-key').hidden = !shape;
+  $('practice').hidden = !shape;
+  labels.options[2].disabled = !shape;
+  if (!shape && labels.value === 'order') labels.value = 'degrees';
+
+  const chord = G.getChord(root.value, type.value);
+  const windowStart = isPosition ? Number(position.value) : 0;
+  let view = G.getPosition({root:root.value, type:type.value, startFret:windowStart, endFret:isPosition ? windowStart + 4 : 24});
+  if (shape) {
+    const startFret = Math.min(shape.startFret, 17);
+    view = {chord, startFret, endFret:startFret + 7, notes:shape.notes};
+    previousShapeFret = shape.notes[0].fret;
+  }
+
+  $('chord-title').textContent = `${chord.symbol} arpeggio`;
+  $('tones').replaceChildren(...chord.tones.map((tone) => {
+    const chip = document.createElement('span');
+    const name = document.createElement('strong');
+    chip.className = 'tone';
+    name.textContent = tone.name;
+    chip.append(name, tone.degree);
+    return chip;
+  }));
+  $('board-info').textContent = shape
+    ? `${strings.value} strings · frets ${shape.startFret}–${shape.endFret} · ${shape.notes[0].name} in the bass`
+    : `Frets ${view.startFret}–${view.endFret} · all chord tones in view`;
+  $('status').textContent = isSweep && !shape ? 'No sweep shapes were found for this selection.' : '';
+  // An up-and-down route uses the same order as the ascending pass on the board.
+  const route = shape ? (direction.value === 'down' ? sequence() : shape.notes) : [];
+  G.draw(board, {...view, label:labels.value, route, leftHanded:$('left').checked, onNote:previewNote});
+  if (shape) renderTab();
+}
+
+async function getAudio() {
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) throw new Error('Audio playback is unavailable in this browser.');
+  audio ??= new Context();
+  if (audio.state !== 'running') await audio.resume();
+  return audio;
+}
+
+function pluck(context, midi, start) {
+  const frequency = 440 * 2 ** ((midi - 69) / 12);
+  const output = context.createGain();
+  output.connect(context.destination);
+  output.gain.setValueAtTime(0.0001, start);
+  output.gain.exponentialRampToValueAtTime(0.3, start + 0.008);
+  output.gain.exponentialRampToValueAtTime(0.0001, start + 0.38);
+  const oscillators = [1, 2, 3].map((harmonic) => {
+    const oscillator = context.createOscillator();
+    const partial = context.createGain();
+    oscillator.frequency.value = frequency * harmonic;
+    partial.gain.setValueAtTime(0.75 / harmonic ** 1.8, start);
+    partial.gain.exponentialRampToValueAtTime(0.0001, start + 0.40 / Math.sqrt(harmonic));
+    oscillator.connect(partial).connect(output);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      partial.disconnect();
+      if (harmonic === 1) output.disconnect();
+    };
+    oscillator.start(start);
+    oscillator.stop(start + 0.40);
+    return oscillator;
+  });
+  return () => {
+    const now = context.currentTime;
+    output.gain.cancelScheduledValues(now);
+    output.gain.setTargetAtTime(0.0001, now, 0.006);
+    oscillators.forEach((oscillator) => oscillator.stop(now + 0.025));
+  };
+}
+
+async function previewNote(note) {
+  try {
+    const context = await getAudio();
+    pluck(context, note.midi, context.currentTime + 0.012);
+    $('status').textContent = `${note.name} · string ${note.string}, fret ${note.fret}`;
+  } catch {
+    $('status').textContent = 'Audio playback is unavailable in this browser.';
+  }
+}
+
+function stop() {
+  if (!playback) return;
+  const current = playback;
+  playback = undefined;
+  current.timers.forEach(clearTimeout);
+  current.voices.forEach((cancel) => cancel());
+  board.querySelector('.playing')?.classList.remove('playing');
+  play.textContent = 'Play shape';
+}
+
+async function togglePlayback() {
+  if (playback) {
+    stop();
+    $('status').textContent = '';
+    return;
+  }
+  const current = {timers:[], voices:[]};
+  playback = current;
+  play.textContent = 'Stop';
+  try {
+    const context = await getAudio();
+    if (playback !== current) return;
+    const notes = sequence();
+    const step = 30 / Number(tempo.value);
+    const start = context.currentTime + 0.045;
+    $('status').textContent = 'Playing sweep shape.';
+    notes.forEach((note, index) => {
+      const at = start + step * index;
+      current.voices.push(pluck(context, note.midi, at));
+      current.timers.push(setTimeout(() => {
+        board.querySelector('.playing')?.classList.remove('playing');
+        board.querySelector(`[data-string="${note.string}"][data-fret="${note.fret}"]`)?.classList.add('playing');
+      }, (at - context.currentTime) * 1000));
+    });
+    current.timers.push(setTimeout(() => {
+      current.voices = [];
+      stop();
+      $('status').textContent = '';
+    }, (0.045 + step * (notes.length - 1) + Math.max(0.41, step)) * 1000));
+  } catch {
+    stop();
+    $('status').textContent = 'Audio playback is unavailable in this browser.';
+  }
+}
+
+[root, type, strings].forEach((select) => select.addEventListener('change', () => {
+  choosePatterns();
+  render();
+}));
+[mode, position, labels, variation, $('left'), direction, tempo].forEach((input) => input.addEventListener('change', render));
+play.addEventListener('click', togglePlayback);
+choosePatterns();
+render();
+</script>
+</body>
+</html>
