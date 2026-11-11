@@ -134,7 +134,96 @@
       .map(({ rank, ...shape }) => shape);
   }
 
-  function draw(container, { notes, startFret, endFret, chord, label = 'degrees', route = [], leftHanded = false, onNote } = {}) {
+  const SUFFIXES = Object.freeze({
+    '': 'major', maj: 'major', major: 'major', M: 'major',
+    m: 'minor', min: 'minor', minor: 'minor', '-': 'minor',
+    dim: 'diminished', '°': 'diminished', aug: 'augmented', '+': 'augmented',
+    sus2: 'sus2', sus4: 'sus4', '6': '6', m6: 'm6',
+    maj7: 'maj7', M7: 'maj7', 'Δ7': 'maj7', '7': '7', m7: 'm7', min7: 'm7',
+    mMaj7: 'mMaj7', 'm(maj7)': 'mMaj7', mM7: 'mMaj7',
+    m7b5: 'm7b5', 'ø7': 'm7b5', dim7: 'dim7', '°7': 'dim7', add9: 'add9', '9': '9',
+  });
+
+  function parseProgression(input) {
+    if (typeof input !== 'string') throw new TypeError('Enter a progression as chord symbols.');
+    const tokens = input.trim().split(/[\s,|→>]+/u).filter(Boolean);
+    if (!tokens.length || tokens.length > 32) throw new RangeError('Enter between 1 and 32 chords.');
+    return tokens.map((token, index) => {
+      const normalized = token.replaceAll('♯', '#').replaceAll('♭', 'b');
+      const match = /^([A-Ga-g][#b]?)(.*)$/.exec(normalized);
+      if (!match || !Object.hasOwn(SUFFIXES, match[2])) {
+        throw new RangeError(`Chord ${index + 1}: “${token}” is unsupported. Try Dm7, G7 or Cmaj7; slash chords are not supported.`);
+      }
+      return { root: match[1][0].toUpperCase() + match[1].slice(1), type: SUFFIXES[match[2]] };
+    });
+  }
+
+  const center = (shape) => (shape.startFret + shape.endFret) / 2;
+  // Compare the nearest pitch/fret on each corresponding string. This measures
+  // hand movement between shapes, not a promise of composed melodic voice leading.
+  function movement(from, to) {
+    return from.notes.reduce((total, note) => total + Math.min(...to.notes
+      .filter((target) => target.string === note.string)
+      .map((target) => Math.abs(target.fret - note.fret))), 0) / from.notes.length;
+  }
+
+  function getProgression({ chords = 'Dm7 G7 Cmaj7', strings = 6, startFret = 0,
+    endFret = 24, maxSpan = 5, targetFret = 5, loop = false } = {}) {
+    const entries = typeof chords === 'string' ? parseProgression(chords) : chords;
+    if (!Array.isArray(entries) || !entries.length || entries.length > 32) {
+      throw new RangeError('Provide between 1 and 32 chords.');
+    }
+    fretNumber(targetFret);
+    const definitions = entries.map((entry) => getChord(entry.root, entry.type));
+    const candidates = entries.map((entry, index) => {
+      const shapes = getSweepPatterns({ ...entry, strings, startFret, endFret, maxSpan });
+      if (!shapes.length) throw new RangeError(`No ${strings}-string shape for ${definitions[index].symbol} in frets ${startFret}–${endFret}. Widen the range or use fewer strings.`);
+      return shapes;
+    });
+    const localCost = (shape) => Math.abs(center(shape) - targetFret) * 0.35 + (shape.endFret - shape.startFret) * 0.1;
+    const transitionCost = (from, to) => movement(from, to) + Math.abs(center(from) - center(to));
+    // Dynamic programming considers the whole progression. For a loop, try each
+    // first shape and include the final-to-first transition in the total cost.
+    let best;
+    const starts = loop ? candidates[0].map((_, index) => index) : [null];
+    for (const fixedStart of starts) {
+      let costs = candidates[0].map((shape, index) => fixedStart === null || fixedStart === index ? localCost(shape) : Infinity);
+      const parents = [];
+      for (let step = 1; step < candidates.length; step++) {
+        const back = [];
+        const nextCosts = candidates[step].map((shape) => {
+          let value = Infinity, parent = 0;
+          candidates[step - 1].forEach((previous, index) => {
+            const score = costs[index] + transitionCost(previous, shape) + localCost(shape);
+            if (score < value) { value = score; parent = index; }
+          });
+          back.push(parent);
+          return value;
+        });
+        parents.push(back);
+        costs = nextCosts;
+      }
+      costs.forEach((cost, last) => {
+        const score = cost + (loop ? transitionCost(candidates.at(-1)[last], candidates[0][fixedStart]) : 0);
+        if (!best || score < best.score) {
+          const indices = [last];
+          for (let step = parents.length - 1; step >= 0; step--) indices.unshift(parents[step][indices[0]]);
+          best = {score, indices};
+        }
+      });
+    }
+    const steps = best.indices.map((index, step) => ({ ...candidates[step][index], chord: definitions[step] }));
+    const transitions = steps.map((from, index) => {
+      const to = steps[index + 1] ?? (loop ? steps[0] : null);
+      if (!to) return null;
+      const commonTones = from.chord.tones.filter((tone) => to.chord.tones.some((target) => target.pitch === tone.pitch));
+      const targetNotes = to.notes.filter((note) => !from.notes.some((current) => current.string === note.string && current.fret === note.fret));
+      return { commonTones, targetNotes, movement: movement(from, to) };
+    });
+    return { steps, transitions, loop: Boolean(loop), startFret, endFret, targetFret };
+  }
+
+  function draw(container, { notes, startFret, endFret, chord, label = 'degrees', route = [], leftHanded = false, nextNotes = [], commonPitches = [], onNote } = {}) {
     if (!container || typeof container.replaceChildren !== 'function') throw new TypeError('Provide a DOM container.');
     fretNumber(startFret);
     fretNumber(endFret);
@@ -197,6 +286,14 @@
       }, STRINGS[6 - string]);
     }
 
+    for (const note of nextNotes) {
+      if (note.fret < startFret || note.fret > endFret) continue;
+      const marker = add(svg, 'g', {class: 'gaj-next-note'});
+      add(marker, 'title', {}, `Next chord: ${note.name}, string ${note.string}, fret ${note.fret}`);
+      add(marker, 'circle', {cx: fretX(note.fret), cy: stringY(note.string), r: 13,
+        fill: 'none', stroke: 'var(--gaj-next, #98bfff)', 'stroke-width': 2, 'stroke-dasharray': '3 3'});
+    }
+
     const ordered = new Map(route.map((note, index) => [`${note.string}:${note.fret}`, index + 1]));
     if (route.length > 1) {
       add(svg, 'polyline', {
@@ -215,6 +312,10 @@
       const attrs = { class: 'gaj-note', 'data-string': string, 'data-fret': fret, 'data-midi': note.midi };
       if (onNote) Object.assign(attrs, { role: 'button', tabindex: 0, 'aria-label': description, style: 'cursor:pointer' });
       const marker = add(svg, 'g', attrs);
+      if (commonPitches.includes(note.pitch)) {
+        add(marker, 'circle', {cx: x, cy: y, r: 17, fill: 'none',
+          stroke: 'var(--gaj-next, #98bfff)', 'stroke-width': 2});
+      }
       add(marker, 'title', {}, description);
       const isRoot = degree === '1';
       add(marker, 'circle', {
@@ -239,5 +340,5 @@
     return svg;
   }
 
-  return Object.freeze({ ROOTS, CHORDS, STANDARD_TUNING, getChord, getPosition, getSweepPatterns, draw });
+  return Object.freeze({ ROOTS, CHORDS, STANDARD_TUNING, getChord, getPosition, getSweepPatterns, parseProgression, getProgression, draw });
 });

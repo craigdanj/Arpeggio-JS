@@ -30,7 +30,7 @@
   .controls,.panel {background:var(--panel);border:1px solid var(--line);border-radius:14px}
   .controls {padding:16px;display:grid;grid-template-columns:.72fr 1.08fr 1.06fr 1.04fr 1.03fr 1.42fr;gap:14px}
   label,.field-label {display:block;font-size:.76rem;font-weight:670;color:var(--sub);margin-bottom:5px}
-  button,select {font:inherit;color:var(--text);border:1px solid #495e54;background:var(--well);border-radius:8px;min-height:39px}
+  button,select,input[type="text"],input[type="number"] {font:inherit;color:var(--text);border:1px solid #495e54;background:var(--well);border-radius:8px;min-height:39px}
   select {width:100%;padding:6px 8px;font-size:.9rem}
   button {padding:6px 12px;cursor:pointer;font-size:.87rem;white-space:nowrap}
   button:hover:not(:disabled) {border-color:var(--mint)}
@@ -67,6 +67,23 @@
   .status {margin:5px 0 0}
   .status:empty {margin:0}
   footer {color:var(--sub);font-size:.8rem;padding:14px 0 23px}
+  .progression-body {padding:16px 17px}
+  .progression-entry {display:flex;gap:8px;align-items:end}
+  .progression-entry > div {flex:1;min-width:0}
+  input[type="text"],input[type="number"] {width:100%;padding:7px 10px;min-width:0}
+  .progression-options {display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:14px 0}
+  .progression-options > div {width:110px}
+  .progression-options .mirror {min-height:39px}
+  .chord-cards {display:flex;gap:8px;overflow-x:auto;padding:3px 2px 9px}
+  .chord-card {text-align:left;min-width:132px;white-space:normal}
+  .chord-card strong,.chord-card small {display:block}
+  .chord-card small {color:var(--sub);font-size:.72rem;margin-top:3px}
+  .chord-card[aria-pressed="true"] {border-color:var(--orange);box-shadow:inset 0 0 0 1px var(--orange)}
+  .progression-presets {display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+  .progression-presets button {font-size:.75rem;min-height:30px}
+  .error {color:#ffb2a8;margin:9px 0;font-size:.83rem}
+  .dot.common {background:none;border:2px solid #98bfff;width:13px;height:13px}
+  .dot.next {background:none;border:2px dashed #98bfff;width:13px;height:13px}
   [hidden] {display:none!important}
   @media (max-width:780px) {.controls {grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media (max-width:470px) {
@@ -93,7 +110,7 @@
     <div><label for="root">Root</label><select id="root"></select></div>
     <div><label for="type">Chord type</label><select id="type"></select></div>
     <div><label for="mode">View</label><select id="mode">
-      <option value="sweep">Sweep patterns</option><option value="position">Fret position</option><option value="full">Full neck</option>
+      <option value="progression">Chord progression</option><option value="sweep">Sweep patterns</option><option value="position">Fret position</option><option value="full">Full neck</option>
     </select></div>
     <div id="strings-field"><label for="strings">Sweep strings</label><select id="strings">
       <option value="6">6 strings · E–e</option><option value="5">5 strings · A–e</option><option value="3">3 strings · G–e</option>
@@ -104,6 +121,25 @@
     </select></div>
     <div id="variation-field"><label for="variation">Sweep shape</label><select id="variation"></select></div>
   </section>
+  <section class="panel" id="progression-panel" hidden aria-labelledby="progression-title">
+    <div class="panel-head"><div><h2 id="progression-title">Connect the changes</h2><p class="hint">Find nearby sweep shapes, then practice them in time.</p></div></div>
+    <div class="progression-body">
+      <div class="progression-entry"><div><label for="progression-input">Chord progression</label><input id="progression-input" type="text" value="Dm7 G7 Cmaj7" maxlength="400" aria-describedby="progression-help progression-error" spellcheck="false"></div><button id="apply-progression" class="primary" type="button">Apply</button></div>
+      <p id="progression-help" class="hint">Separate chords with spaces, commas, | or →. Up to 32 chords. Use m for minor and maj7 for major seventh.</p>
+      <div class="progression-presets" aria-label="Example progressions"><button type="button" data-progression="Dm7 G7 Cmaj7">Jazz · ii–V–I</button><button type="button" data-progression="Am F C G">Pop · vi–IV–I–V</button><button type="button" data-progression="Am7 Dm7 E7 Am7">Minor turnaround</button><button type="button" data-progression="C7 F7 C7 C7 F7 F7 C7 C7 G7 F7 C7 G7">12-bar blues</button></div>
+      <div class="progression-options">
+        <div><label for="range-start">Lowest fret</label><input type="number" id="range-start" min="0" max="24" value="0"></div>
+        <div><label for="range-end">Highest fret</label><input type="number" id="range-end" min="0" max="24" value="15"></div>
+        <div><label for="target-fret">Near fret</label><input type="number" id="target-fret" min="0" max="24" value="5"></div>
+        <div><label for="beats">Beats / chord</label><select id="beats"><option value="2">2 beats</option><option value="4" selected>4 beats</option><option value="8">8 beats</option></select></div>
+        <label class="mirror"><input id="loop-progression" type="checkbox" checked>Loop</label>
+        <label class="mirror"><input id="show-next" type="checkbox" checked>Show next chord</label>
+      </div>
+      <p id="progression-error" class="error" role="alert"></p>
+      <div id="chord-cards" class="chord-cards" role="group" aria-label="Chords in progression"></div>
+      <p id="transition-info" class="hint" aria-live="polite"></p>
+    </div>
+  </section>
   <section class="panel" aria-labelledby="chord-title">
     <div class="panel-head">
       <div><h2 id="chord-title"></h2><p class="hint" id="board-info"></p></div>
@@ -111,7 +147,7 @@
     </div>
     <div class="board-scroll" id="board-scroll" tabindex="0" role="region" aria-label="Scrollable fretboard"><div id="board"></div></div>
     <div class="panel-foot">
-      <div class="marker-key"><span><i class="dot root"></i>Root</span><span><i class="dot"></i>Chord tone</span><span id="route-key"><i class="route"></i>Sweep path</span></div>
+      <div class="marker-key"><span><i class="dot root"></i>Root</span><span><i class="dot"></i>Chord tone</span><span id="common-key" hidden><i class="dot common"></i>Common tone</span><span id="next-key" hidden><i class="dot next"></i>Next shape</span><span id="route-key"><i class="route"></i>Sweep path</span></div>
       <label class="mirror"><input type="checkbox" id="left"> Mirror for left-handed view</label>
     </div>
   </section>
@@ -270,7 +306,96 @@
       .map(({ rank, ...shape }) => shape);
   }
 
-  function draw(container, { notes, startFret, endFret, chord, label = 'degrees', route = [], leftHanded = false, onNote } = {}) {
+  const SUFFIXES = Object.freeze({
+    '': 'major', maj: 'major', major: 'major', M: 'major',
+    m: 'minor', min: 'minor', minor: 'minor', '-': 'minor',
+    dim: 'diminished', '°': 'diminished', aug: 'augmented', '+': 'augmented',
+    sus2: 'sus2', sus4: 'sus4', '6': '6', m6: 'm6',
+    maj7: 'maj7', M7: 'maj7', 'Δ7': 'maj7', '7': '7', m7: 'm7', min7: 'm7',
+    mMaj7: 'mMaj7', 'm(maj7)': 'mMaj7', mM7: 'mMaj7',
+    m7b5: 'm7b5', 'ø7': 'm7b5', dim7: 'dim7', '°7': 'dim7', add9: 'add9', '9': '9',
+  });
+
+  function parseProgression(input) {
+    if (typeof input !== 'string') throw new TypeError('Enter a progression as chord symbols.');
+    const tokens = input.trim().split(/[\s,|→>]+/u).filter(Boolean);
+    if (!tokens.length || tokens.length > 32) throw new RangeError('Enter between 1 and 32 chords.');
+    return tokens.map((token, index) => {
+      const normalized = token.replaceAll('♯', '#').replaceAll('♭', 'b');
+      const match = /^([A-Ga-g][#b]?)(.*)$/.exec(normalized);
+      if (!match || !Object.hasOwn(SUFFIXES, match[2])) {
+        throw new RangeError(`Chord ${index + 1}: “${token}” is unsupported. Try Dm7, G7 or Cmaj7; slash chords are not supported.`);
+      }
+      return { root: match[1][0].toUpperCase() + match[1].slice(1), type: SUFFIXES[match[2]] };
+    });
+  }
+
+  const center = (shape) => (shape.startFret + shape.endFret) / 2;
+  // Compare the nearest pitch/fret on each corresponding string. This measures
+  // hand movement between shapes, not a promise of composed melodic voice leading.
+  function movement(from, to) {
+    return from.notes.reduce((total, note) => total + Math.min(...to.notes
+      .filter((target) => target.string === note.string)
+      .map((target) => Math.abs(target.fret - note.fret))), 0) / from.notes.length;
+  }
+
+  function getProgression({ chords = 'Dm7 G7 Cmaj7', strings = 6, startFret = 0,
+    endFret = 24, maxSpan = 5, targetFret = 5, loop = false } = {}) {
+    const entries = typeof chords === 'string' ? parseProgression(chords) : chords;
+    if (!Array.isArray(entries) || !entries.length || entries.length > 32) {
+      throw new RangeError('Provide between 1 and 32 chords.');
+    }
+    fretNumber(targetFret);
+    const definitions = entries.map((entry) => getChord(entry.root, entry.type));
+    const candidates = entries.map((entry, index) => {
+      const shapes = getSweepPatterns({ ...entry, strings, startFret, endFret, maxSpan });
+      if (!shapes.length) throw new RangeError(`No ${strings}-string shape for ${definitions[index].symbol} in frets ${startFret}–${endFret}. Widen the range or use fewer strings.`);
+      return shapes;
+    });
+    const localCost = (shape) => Math.abs(center(shape) - targetFret) * 0.35 + (shape.endFret - shape.startFret) * 0.1;
+    const transitionCost = (from, to) => movement(from, to) + Math.abs(center(from) - center(to));
+    // Dynamic programming considers the whole progression. For a loop, try each
+    // first shape and include the final-to-first transition in the total cost.
+    let best;
+    const starts = loop ? candidates[0].map((_, index) => index) : [null];
+    for (const fixedStart of starts) {
+      let costs = candidates[0].map((shape, index) => fixedStart === null || fixedStart === index ? localCost(shape) : Infinity);
+      const parents = [];
+      for (let step = 1; step < candidates.length; step++) {
+        const back = [];
+        const nextCosts = candidates[step].map((shape) => {
+          let value = Infinity, parent = 0;
+          candidates[step - 1].forEach((previous, index) => {
+            const score = costs[index] + transitionCost(previous, shape) + localCost(shape);
+            if (score < value) { value = score; parent = index; }
+          });
+          back.push(parent);
+          return value;
+        });
+        parents.push(back);
+        costs = nextCosts;
+      }
+      costs.forEach((cost, last) => {
+        const score = cost + (loop ? transitionCost(candidates.at(-1)[last], candidates[0][fixedStart]) : 0);
+        if (!best || score < best.score) {
+          const indices = [last];
+          for (let step = parents.length - 1; step >= 0; step--) indices.unshift(parents[step][indices[0]]);
+          best = {score, indices};
+        }
+      });
+    }
+    const steps = best.indices.map((index, step) => ({ ...candidates[step][index], chord: definitions[step] }));
+    const transitions = steps.map((from, index) => {
+      const to = steps[index + 1] ?? (loop ? steps[0] : null);
+      if (!to) return null;
+      const commonTones = from.chord.tones.filter((tone) => to.chord.tones.some((target) => target.pitch === tone.pitch));
+      const targetNotes = to.notes.filter((note) => !from.notes.some((current) => current.string === note.string && current.fret === note.fret));
+      return { commonTones, targetNotes, movement: movement(from, to) };
+    });
+    return { steps, transitions, loop: Boolean(loop), startFret, endFret, targetFret };
+  }
+
+  function draw(container, { notes, startFret, endFret, chord, label = 'degrees', route = [], leftHanded = false, nextNotes = [], commonPitches = [], onNote } = {}) {
     if (!container || typeof container.replaceChildren !== 'function') throw new TypeError('Provide a DOM container.');
     fretNumber(startFret);
     fretNumber(endFret);
@@ -333,6 +458,14 @@
       }, STRINGS[6 - string]);
     }
 
+    for (const note of nextNotes) {
+      if (note.fret < startFret || note.fret > endFret) continue;
+      const marker = add(svg, 'g', {class: 'gaj-next-note'});
+      add(marker, 'title', {}, `Next chord: ${note.name}, string ${note.string}, fret ${note.fret}`);
+      add(marker, 'circle', {cx: fretX(note.fret), cy: stringY(note.string), r: 13,
+        fill: 'none', stroke: 'var(--gaj-next, #98bfff)', 'stroke-width': 2, 'stroke-dasharray': '3 3'});
+    }
+
     const ordered = new Map(route.map((note, index) => [`${note.string}:${note.fret}`, index + 1]));
     if (route.length > 1) {
       add(svg, 'polyline', {
@@ -351,6 +484,10 @@
       const attrs = { class: 'gaj-note', 'data-string': string, 'data-fret': fret, 'data-midi': note.midi };
       if (onNote) Object.assign(attrs, { role: 'button', tabindex: 0, 'aria-label': description, style: 'cursor:pointer' });
       const marker = add(svg, 'g', attrs);
+      if (commonPitches.includes(note.pitch)) {
+        add(marker, 'circle', {cx: x, cy: y, r: 17, fill: 'none',
+          stroke: 'var(--gaj-next, #98bfff)', 'stroke-width': 2});
+      }
       add(marker, 'title', {}, description);
       const isRoot = degree === '1';
       add(marker, 'circle', {
@@ -375,7 +512,7 @@
     return svg;
   }
 
-  return Object.freeze({ ROOTS, CHORDS, STANDARD_TUNING, getChord, getPosition, getSweepPatterns, draw });
+  return Object.freeze({ ROOTS, CHORDS, STANDARD_TUNING, getChord, getPosition, getSweepPatterns, parseProgression, getProgression, draw });
 });
 
 </script>
@@ -386,6 +523,9 @@ const $ = (id) => document.getElementById(id);
 const root = $('root'), type = $('type'), mode = $('mode'), strings = $('strings');
 const position = $('position'), labels = $('label'), variation = $('variation');
 const board = $('board'), play = $('play'), direction = $('direction'), tempo = $('tempo');
+let progression;
+let chordIndex = 0;
+let progressionDirty = false;
 let shape;
 let patterns = [];
 let audio;
@@ -438,12 +578,23 @@ function renderTab() {
   $('practice-info').textContent = `${notes.length} notes · eighth-note playback`;
 }
 
-function render() {
-  stop();
+function render(keepPlaying = false) {
+  if (keepPlaying !== true) stop();
+  const isProgression = mode.value === 'progression';
   const isSweep = mode.value === 'sweep';
   const isPosition = mode.value === 'position';
-  shape = isSweep ? patterns[Number(variation.value)] : undefined;
-  $('strings-field').hidden = !isSweep;
+  shape = isProgression ? progression?.steps[chordIndex] : isSweep ? patterns[Number(variation.value)] : undefined;
+  $('progression-panel').hidden = !isProgression;
+  root.disabled = type.disabled = isProgression;
+  if (isProgression && shape) {
+    const spelling = shape.chord.root.replaceAll('♯', '#').replaceAll('♭', 'b');
+    if (![...root.options].some((option) => option.value === spelling)) root.append(new Option(shape.chord.root, spelling));
+    root.value = spelling;
+    type.value = shape.chord.type;
+  }
+  $('common-key').hidden = $('next-key').hidden = !isProgression || !$('show-next').checked;
+  play.disabled = isProgression && (!progression || progressionDirty);
+  $('strings-field').hidden = !isSweep && !isProgression;
   $('position-field').hidden = !isPosition;
   $('variation-field').hidden = !isSweep;
   $('route-key').hidden = !shape;
@@ -451,12 +602,14 @@ function render() {
   labels.options[2].disabled = !shape;
   if (!shape && labels.value === 'order') labels.value = 'degrees';
 
-  const chord = G.getChord(root.value, type.value);
+  const chord = isProgression && shape ? shape.chord : G.getChord(root.value, type.value);
   const windowStart = isPosition ? Number(position.value) : 0;
   let view = G.getPosition({root:root.value, type:type.value, startFret:windowStart, endFret:isPosition ? windowStart + 4 : 24});
   if (shape) {
-    const startFret = Math.min(shape.startFret, 17);
-    view = {chord, startFret, endFret:startFret + 7, notes:shape.notes};
+    const next = isProgression && $('show-next').checked ? progression.transitions[chordIndex] : null;
+    const allFrets = [...shape.notes, ...(next?.targetNotes ?? [])].map((note) => note.fret);
+    const startFret = Math.max(0, Math.min(...allFrets) - 1);
+    view = {chord, startFret, endFret:Math.min(24, Math.max(startFret + 7, ...allFrets)), notes:shape.notes};
     previousShapeFret = shape.notes[0].fret;
   }
 
@@ -475,8 +628,20 @@ function render() {
   $('status').textContent = isSweep && !shape ? 'No sweep shapes were found for this selection.' : '';
   // An up-and-down route uses the same order as the ascending pass on the board.
   const route = shape ? (direction.value === 'down' ? sequence() : shape.notes) : [];
-  G.draw(board, {...view, label:labels.value, route, leftHanded:$('left').checked, onNote:previewNote});
+  const transition = isProgression && $('show-next').checked ? progression?.transitions[chordIndex] : null;
+  G.draw(board, {...view, nextNotes:transition?.targetNotes ?? [], commonPitches:transition?.commonTones.map((tone) => tone.pitch) ?? [], label:labels.value, route, leftHanded:$('left').checked, onNote:previewNote});
   if (shape) renderTab();
+  play.textContent = playback ? 'Stop' : isProgression ? 'Play progression' : 'Play shape';
+  $('practice-title').textContent = isProgression ? 'Current chord tab' : 'Sweep tab';
+  if (isProgression && progression) {
+    renderCards();
+    const next = progression.steps[chordIndex + 1] ?? (progression.loop ? progression.steps[0] : null);
+    const change = progression.transitions[chordIndex];
+    $('transition-info').textContent = next
+      ? `Next: ${next.chord.symbol} · common tones: ${change.commonTones.map((tone) => tone.name).join(', ') || 'none'} · average movement on the same string: ${change.movement.toFixed(1)} frets.`
+      : 'Final chord. Enable Loop to connect back to the first chord.';
+    $('practice-info').textContent += ` · ${$('beats').value} beats per chord · repeat or truncate the pattern to fill the chord`;
+  }
 }
 
 async function getAudio() {
@@ -533,9 +698,9 @@ function stop() {
   const current = playback;
   playback = undefined;
   current.timers.forEach(clearTimeout);
-  current.voices.forEach((cancel) => cancel());
+  current.voices.forEach((voice) => typeof voice === 'function' ? voice() : voice.cancel());
   board.querySelector('.playing')?.classList.remove('playing');
-  play.textContent = 'Play shape';
+  play.textContent = mode.value === 'progression' ? 'Play progression' : 'Play shape';
 }
 
 async function togglePlayback() {
@@ -544,6 +709,7 @@ async function togglePlayback() {
     $('status').textContent = '';
     return;
   }
+  if (mode.value === 'progression') return playProgression();
   const current = {timers:[], voices:[]};
   playback = current;
   play.textContent = 'Stop';
@@ -573,11 +739,122 @@ async function togglePlayback() {
   }
 }
 
-[root, type, strings].forEach((select) => select.addEventListener('change', () => {
+function renderCards() {
+  $('chord-cards').replaceChildren(...progression.steps.map((step, index) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'chord-card';
+    card.setAttribute('aria-pressed', String(index === chordIndex));
+    const title = document.createElement('strong');
+    title.textContent = `${index + 1}. ${step.chord.symbol}`;
+    const detail = document.createElement('small');
+    detail.textContent = `Frets ${step.startFret}–${step.endFret} · ${step.notes[0].name} bass`;
+    card.append(title, detail);
+    card.addEventListener('click', () => {chordIndex = index; render();});
+    return card;
+  }));
+}
+
+function applyProgression() {
+  stop();
+  try {
+    const numeric = (id) => {
+      if ($(id).value.trim() === '') throw new RangeError('Fill in the fret range and preferred fret.');
+      return Number($(id).value);
+    };
+    progression = G.getProgression({chords:$('progression-input').value, strings:Number(strings.value),
+      startFret:numeric('range-start'), endFret:numeric('range-end'), targetFret:numeric('target-fret'),
+      loop:$('loop-progression').checked});
+    chordIndex = 0;
+    progressionDirty = false;
+    $('progression-input').removeAttribute('aria-invalid');
+    $('progression-error').textContent = '';
+  } catch (error) {
+    progressionDirty = true;
+    $('progression-input').setAttribute('aria-invalid', 'true');
+    $('progression-error').textContent = error.message;
+  }
+  render();
+}
+
+async function playProgression() {
+  if (!progression || progressionDirty) return;
+  const current = {timers:[], voices:[], next:0};
+  playback = current;
+  play.textContent = 'Stop';
+  try {
+    const context = await getAudio();
+    if (playback !== current) return;
+    const stepTime = 30 / Number(tempo.value);
+    const count = Number($('beats').value) * 2;
+    let start = context.currentTime + 0.06;
+    let index = chordIndex;
+    function queueChord() {
+      if (playback !== current) return;
+      const step = progression.steps[index];
+      let notes = step.notes;
+      if (direction.value === 'down') notes = [...notes].reverse();
+      if (direction.value === 'both') notes = [...notes, ...notes.slice(0, -1).reverse()];
+      // Prune finished voices; only one chord is scheduled ahead.
+      current.voices = current.voices.filter((voice) => voice.end > context.currentTime);
+      const schedule = (callback, at) => {
+        const timer = setTimeout(() => {
+          current.timers = current.timers.filter((id) => id !== timer);
+          if (playback === current) callback();
+        }, Math.max(0, (at - context.currentTime) * 1000));
+        current.timers.push(timer);
+      };
+      const selected = index;
+      schedule(() => {
+        chordIndex = selected;
+        render(true);
+        $('status').textContent = `Playing chord ${selected + 1} of ${progression.steps.length}: ${step.chord.symbol}.`;
+      }, start);
+      for (let n = 0; n < count; n++) {
+        const note = notes[n % notes.length];
+        const at = start + n * stepTime;
+        current.voices.push({cancel:pluck(context, note.midi, at), end:at + 0.41});
+        schedule(() => {
+          board.querySelector('.playing')?.classList.remove('playing');
+          board.querySelector(`[data-string="${note.string}"][data-fret="${note.fret}"]`)?.classList.add('playing');
+        }, at);
+      }
+      start += count * stepTime;
+      index++;
+      if (index === progression.steps.length) {
+        if (progression.loop) index = 0;
+        else {schedule(() => {stop(); $('status').textContent = 'Progression complete.';}, start + Math.max(0, 0.41 - stepTime)); return;}
+      }
+      // Queue the next chord just before the boundary, on the AudioContext clock.
+      schedule(queueChord, start - 0.12);
+    }
+    queueChord();
+  } catch {
+    stop();
+    $('status').textContent = 'Audio playback is unavailable in this browser.';
+  }
+}
+
+$('apply-progression').addEventListener('click', applyProgression);
+$('progression-input').addEventListener('keydown', (event) => {if (event.key === 'Enter') applyProgression();});
+$('progression-input').addEventListener('input', () => {
+  stop(); progressionDirty = true; play.disabled = true;
+  $('progression-error').textContent = 'Press Apply to use your edited progression.';
+});
+['range-start', 'range-end', 'target-fret', 'loop-progression'].forEach((id) => $(id).addEventListener('change', applyProgression));
+document.querySelectorAll('[data-progression]').forEach((button) => button.addEventListener('click', () => {
+  $('progression-input').value = button.dataset.progression;
+  applyProgression();
+}));
+window.addEventListener('pagehide', stop);
+
+[root, type].forEach((select) => select.addEventListener('change', () => {
   choosePatterns();
   render();
 }));
-[mode, position, labels, variation, $('left'), direction, tempo].forEach((input) => input.addEventListener('change', render));
+strings.addEventListener('change', () => {choosePatterns(); if (mode.value === 'progression') applyProgression(); else render();});
+mode.addEventListener('change', () => {if (mode.value === 'progression') applyProgression(); else {choosePatterns(); render();}});
+[position, labels, variation, $('left'), direction, tempo, $('beats'), $('show-next')].forEach((input) => input.addEventListener('change', () => render()));
 play.addEventListener('click', togglePlayback);
 choosePatterns();
 render();
